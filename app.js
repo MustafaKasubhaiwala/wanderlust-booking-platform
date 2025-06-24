@@ -1,13 +1,16 @@
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
-const Listing = require("./models/listing.js");
 const path = require("path");
 const methodOverride = require("method-override");
 const ejsMate = require("ejs-mate");
-
+const ExpressError = require("./utils/ExpressError.js");
+const { wrap } = require("module");
 const MONGO_URL = "mongodb://127.0.0.1:27017/wanderlust";
-
+const listings = require("./routes/listing.js");
+const reviews = require("./routes/review.js");
+const session = require("express-session");
+const flash = require("connect-flash");
 main()
     .then(()=>{
         console.log("connected to Db");
@@ -26,46 +29,49 @@ app.use(methodOverride("_method"));
 
 app.engine('ejs', ejsMate);
 app.use(express.static(path.join(__dirname,"/public")));
+
+const sessionOptions = {
+    secret:"mysupersecretcode",
+    resave:false,
+    saveUninitialized:true,
+    cookie:{
+        expires:Date.now() + 7*24*60*60*1000,
+        maxAge:7*24*60*60*1000,
+        httpOnly:true,
+    }
+};
+
+
 app.get("/",(req,res)=>{
     res.send("Hi, I am root");
 });
 
-app.get("/listings",async (req,res)=>{
-    const allListings = await Listing.find({}); 
-    res.render("listings/index",{allListings});
-});
-app.get("/listings/new", (req,res)=>{
-    res.render("listings/new.ejs");
-});
-app.get("/listings/:id", async (req,res)=>{
-     let {id} = req.params;
-     const listing = await Listing.findById(id);
-        res.render("listings/show.ejs",{listing});
+app.use(session(sessionOptions));
+app.use(flash());
+
+
+
+app.use((req,res,next)=>{
+    res.locals.success = req.flash("success");
+    res.locals.error = req.flash("error");
+    next();
 });
 
-app.post("/listings",async (req,res)=>{
-    const newListing = new Listing(req.body.listing);
-    await newListing.save();
-    res.redirect("/listings");
+
+
+
+app.use("/listings",listings);
+
+/*reviews*/
+
+app.use("/listings/:id/reviews",reviews);
+
+app.use((err, req, res, next) => {
+    const { statusCode = 500, message = "Something went wrong!" } = err;
+    res.render("listings/error.ejs",{message});
+
 });
 
-app.get("/listings/:id/edit", async (req,res)=>{
-    let {id} = req.params;
-    const listing = await Listing.findById(id);
-   res.render("listings/edit.ejs",{listing});
-});
-
-app.put("/listings/:id", async (req, res) => {
-    let { id } = req.params;
-    await Listing.findByIdAndUpdate(id, { ...req.body.listing });
-    res.redirect(`/listings/${id}`);
-});
-
-app.delete("/listings/:id", async (req,res)=>{
-    let {id} = req.params;
-    await Listing.findByIdAndDelete(id);
-    res.redirect("/listings");
-});
 
 app.listen(8080,()=>{
     console.log("server is listening to port 8080");
