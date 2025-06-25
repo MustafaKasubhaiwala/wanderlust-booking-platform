@@ -20,7 +20,7 @@ router.post("/", wrapAsync(async(req,res)=>{
        let listing = await Listing.findById(req.params.id);
         let newReview = new Review(req.body.review);
 
-        listing.review.push(newReview);
+        listing.reviews.push(newReview);
         await newReview.save();
         await listing.save();
         req.flash("success","New Review created");
